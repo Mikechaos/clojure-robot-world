@@ -1,5 +1,6 @@
 (ns robot-world.core-test
   (:require [clojure.test :refer :all]
+            [robot-world.version-2 :as v2]))
 
 (deftest test-find-stack
   (testing "find-stack should return the correct stack index"
