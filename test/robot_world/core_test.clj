@@ -73,3 +73,23 @@
                                   (v2/pile 3 3 :over)
                                   (v2/pile 4 0 :onto))]
         (is (= final-no-op-world initial-no-op-world))))))
+
+(deftest test-input-program
+  (testing "Test parsing and executing the input program"
+    (let [input-program ["10"
+                         "move 3 over 2"
+                         "move 8 onto 7"
+                         "move 9 onto 7"
+                         "move 6 over 8"
+                         "pile 7 onto 8"
+                         "pile 3 onto 1"
+                         "pile 4 onto 1"
+                         "move 3 over 2"
+                         "pile 2 onto 4"
+                         "pile 6 onto 5"
+                         "pile 8 over 10"]
+          world (-> input-program
+                    (v2/parse-commands)
+                    (v2/run-commands))
+          expected-output [[1 4 2 3] [] [] [] [5 6] [] [] [] [] [10 8 7 9]]]
+         (is (= world expected-output)))))

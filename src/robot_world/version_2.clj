@@ -92,3 +92,30 @@
 
 (defn pile [src-block dest-block pile-type block-world]
   (perform-command "pile" src-block dest-block pile-type block-world move-pile))
+
+(defn initialize-world [n]
+  (mapv vector (range 1 (inc n))))
+
+(defn parse-command [command]
+  (let [[_ command-type src-block modifier-type dest-block] (re-find #"(move|pile) (\d+) (onto|over) (\d+)" command)
+        src-block (Integer/parseInt src-block)
+        dest-block (Integer/parseInt dest-block)
+        modifier-type (keyword modifier-type)]
+    [command-type src-block dest-block modifier-type]))
+
+(defn parse-commands [commands]
+  (let [n (Integer/parseInt (first commands))
+        commands (rest commands)]
+    (concat [n]
+  (map parse-command commands))))
+
+(defn run-commands [commands]
+  (let [n (first commands)
+        commands (rest commands)
+        world (initialize-world n)]
+    (reduce (fn [world [command-type src-block dest-block modifier-type]]
+              (if (= command-type "move")
+                (move src-block dest-block modifier-type world)
+                (pile src-block dest-block modifier-type world)))
+            world
+            commands)))
