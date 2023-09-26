@@ -16,14 +16,9 @@
           block-world
           blocks))
 
-
 (defn index-of [item coll]
-  (loop [i 0
-         coll-seq coll]
-    (cond
-      (empty? coll-seq) -1
-      (= item (first coll-seq)) i
-      :else (recur (inc i) (rest coll-seq)))))
+  (some (fn [[idx elem]] (when (= item elem) idx))
+        (map-indexed vector coll)))
 
 (defn validate-clear-block [block block-world]
   (when-let [stack-index (find-stack block block-world)]
@@ -68,24 +63,27 @@
                              dest-stack-index (into (nth block-world dest-stack-index) blocks-pile))]
     updated-world))
 
+
 (defn validate-world-before-command [src-block dest-block block-world]
   (let [src-stack-index (find-stack src-block block-world)
         dest-stack-index (find-stack dest-block block-world)]
-    (if (or (or (nil? src-stack-index) (nil? dest-stack-index)) (= src-stack-index dest-stack-index))
-      [false "invalid command"]
-      [src-stack-index dest-stack-index])))
+    (cond
+      (or (nil? src-stack-index) (nil? dest-stack-index) (= src-stack-index dest-stack-index))
+      (throw (ex-info "Invalid command" {:src-block src-block :dest-block dest-block :block-world block-world}))
+      :else [src-stack-index dest-stack-index])))
 
 (defn perform-command [command-type src-block dest-block modifier-type block-world command-fn]
-  (let [[src-stack-index dest-stack-index]
-        (validate-world-before-command src-block dest-block block-world)]
-    (if (false? src-stack-index)
-      (log-illegal-move-and-return command-type src-block dest-block modifier-type block-world)
-      (let [cleared-world (cond->>
-                              block-world
-                            (= command-type "move") (clear-block src-block)
-                            (= modifier-type :onto) (clear-block dest-block))
-            new-world (command-fn [src-block src-stack-index] dest-stack-index cleared-world)]
-        (log-legal-move-and-return command-type src-block dest-block modifier-type new-world)))))
+  (try
+    (let [[src-stack-index dest-stack-index]
+          (validate-world-before-command src-block dest-block block-world)
+          cleared-world (cond->> block-world
+                          (= command-type "move") (clear-block src-block)
+                          (= modifier-type :onto) (clear-block dest-block))
+          new-world (command-fn [src-block src-stack-index] dest-stack-index cleared-world)]
+      (log-legal-move-and-return command-type src-block dest-block modifier-type new-world))
+    (catch Exception e
+      (log-illegal-move-and-return command-type src-block dest-block modifier-type (ex-data e))
+      block-world)))
 
 (defn move [src-block dest-block move-type block-world]
   (perform-command "move" src-block dest-block move-type block-world move-block))
