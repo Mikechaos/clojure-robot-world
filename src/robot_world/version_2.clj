@@ -34,12 +34,12 @@
       (return-blocks blocks-to-return updated-world))
     block-world))
 
-(defn log-illegal-move-and-return [command-type src-block dest-block modifier-type block-world]
+(defn log-illegal-move-and-return [command-type src-block dest-block modifier-type ex-meta block-world]
   (println
    "Performing" command-type
    src-block modifier-type dest-block
    "- Invalid move"
-   "in world" block-world)
+   "in world" ex-meta)
   block-world)
 
 (defn log-legal-move-and-return [command-type src-block dest-block modifier-type block-world]
@@ -69,21 +69,23 @@
         dest-stack-index (find-stack dest-block block-world)]
     (cond
       (or (nil? src-stack-index) (nil? dest-stack-index) (= src-stack-index dest-stack-index))
-      (throw (ex-info "Invalid command" {:src-block src-block :dest-block dest-block :block-world block-world}))
+      (throw (ex-info "Invalid command" {:src-stack-index src-stack-index
+                                         :dest-stack-index dest-stack-index
+                                         :block-world block-world}))
       :else [src-stack-index dest-stack-index])))
 
 (defn perform-command [command-type src-block dest-block modifier-type block-world command-fn]
   (try
     (let [[src-stack-index dest-stack-index]
           (validate-world-before-command src-block dest-block block-world)
-          cleared-world (cond->> block-world
-                          (= command-type "move") (clear-block src-block)
-                          (= modifier-type :onto) (clear-block dest-block))
-          new-world (command-fn [src-block src-stack-index] dest-stack-index cleared-world)]
+          new-world (cond->> block-world
+                      (= command-type "move") (clear-block src-block)
+                      (= modifier-type :onto) (clear-block dest-block)
+                      true (command-fn [src-block src-stack-index] dest-stack-index))]
       (log-legal-move-and-return command-type src-block dest-block modifier-type new-world))
     (catch Exception e
-      (log-illegal-move-and-return command-type src-block dest-block modifier-type (ex-data e))
-      block-world)))
+      (log-illegal-move-and-return
+       command-type src-block dest-block modifier-type (ex-data e) block-world))))
 
 (defn move [src-block dest-block move-type block-world]
   (perform-command "move" src-block dest-block move-type block-world move-block))
