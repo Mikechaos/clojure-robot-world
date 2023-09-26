@@ -8,11 +8,15 @@
 
 ;; Helper Functions
 (defn some-indexed [pred coll]
-  (some (fn [[idx item]] (when (pred item) idx))
+  (some (fn [pair]
+          (let [[idx item] pair]
+            (when (pred idx item) idx)))
         (map-indexed vector coll)))
 
-(defn find-stack [block block-world] 
-  (some-indexed #(some #{block} %2) block-world))
+(defn find-stack [block block-world]
+  (some-indexed (fn [idx stack]
+                  (when (some #{block} stack) idx))
+                block-world))
 
 
 (defn replace-stack [idx new-stack block-world]
@@ -26,83 +30,99 @@
       (= item (first coll-seq)) i
       :else (recur (inc i) (rest coll-seq)))))
 
+(defn on-top-of [block block-world]
+  (let [stack-index (find-stack block block-world)]
+    (when (not= stack-index -1)
+      (nth block-world stack-index))))
+
+(defn return-blocks [blocks block-world]
+  (reduce (fn [bw block]
+            (let [original-pos (find-stack block bw)]
+              (replace-stack original-pos (conj (bw original-pos) block) bw)))
+          block-world
+          blocks))
+
+(defn return-blocks [blocks block-world]
+  (reduce (fn [world block]
+            (let [original-position (- block 1)] ; calculate the original stack of the block
+              (update world original-position conj block))) ; return block to its original stack
+          block-world
+          blocks))
+
 ;; Macros
-(defmacro defcommand [name & body]
-  `(defn ~name [current-block-world# & args#]
-     (println "Executing command:" '~name args#)
-     (let [new-block-world# (apply (fn [current-block-world# & args#] ~@body) current-block-world# args#)]
+(defmacro defcommand [name args & body]
+  `(defn ~name ~args
+     (println "Executing command:" '~name ~args)
+     (let [new-block-world# (do ~@body)]
        new-block-world#)))
 
-(defmacro with-blocks-on-top [block & body]
-  `(let [stack (on-top-of ~block block-world)
-         blocks-on-top (rest stack)]
-     (return-blocks blocks-on-top block-world)
+(defmacro with-blocks-on-top [current-block-world block & body]
+  `(let [stack# (on-top-of ~block ~current-block-world)
+         blocks-on-top# (rest stack#)]
+     (return-blocks blocks-on-top# ~current-block-world)
      ~@body
-     (reduce (fn [bw block]
-               (let [original-pos (find-stack block bw)]
-                 (replace-stack original-pos (conj (get bw original-pos) ~block) bw)))
-             block-world
-             blocks-on-top)))
+     (reduce (fn [bw# block#]
+               (let [original-pos# (find-stack block# bw#)]
+                 (replace-stack original-pos# (conj (get bw# original-pos#) ~block) bw#)))
+             ~current-block-world
+             blocks-on-top#)))
 
-(defmacro remove-block [block stack-index]
-  `(let [current-state# (nth @block-world-history @current-state-index)
-         block-index# (index-of ~block (nth current-state# ~stack-index))]
+(defmacro remove-block [current-block-world block stack-index]
+  `(let [block-index# (index-of ~block (nth ~current-block-world ~stack-index))]
      (when (not= block-index# -1)
-       (let [updated-stack# (vec (remove #{~block} (nth current-state# ~stack-index)))]
-         (assoc-in current-state# [~stack-index] updated-stack#)))))
+       (let [updated-stack# (vec (remove #{~block} (nth ~current-block-world ~stack-index)))]
+         (assoc-in ~current-block-world [~stack-index] updated-stack#)))))
 
-(defmacro move-block-to [src dest blocks-on-dest]
-  `(let [pos-src (find-stack ~src)
-         pos-dest (find-stack ~dest)]
-     (replace-stack pos-src [])
-     (replace-stack pos-dest (concat [~dest] (on-top-of ~src) ~blocks-on-dest))))
+(defmacro move-block-to [current-block-world src dest blocks-on-dest]
+  `(let [pos-src (find-stack ~src ~current-block-world)
+         pos-dest (find-stack ~dest ~current-block-world)]
+     (replace-stack pos-src [] ~current-block-world)
+     (replace-stack pos-dest (concat [~dest] (on-top-of ~src ~current-block-world) ~blocks-on-dest) ~current-block-world)))
 
-(defmacro return-blocks-on-top [a]
-  `(let [stack# (find-stack ~a)
+(defmacro return-blocks-on-top [current-block-world a]
+  `(let [stack# (find-stack ~a ~current-block-world)
          idx# (index-of ~a stack#)]
      (doseq [block# (take-last (- (count stack#) idx#) stack#)]
-       (move-block-to-new-stack block#))))
+       (move-block-to-new-stack ~current-block-world block#))))
 
-(defmacro add-block-to-stack [block stack-index]
-  `(let [current-state# (nth @block-world-history @current-state-index)
-         updated-stack# (conj (nth current-state# ~stack-index) ~block)]
-     (assoc-in current-state# [~stack-index] updated-stack#)))
+(defmacro add-block-to-stack [current-block-world block stack-index]
+  `(let [updated-stack# (conj (nth ~current-block-world ~stack-index) ~block)]
+     (assoc-in ~current-block-world [~stack-index] updated-stack#)))
 
-(defmacro place-block-on [a b]
-  `(let [stack-a# (find-stack ~a)
-         stack-b# (find-stack ~b)]
-     (remove-block ~a stack-a#)
-     (add-block-to-stack ~a stack-b#)))
+(defmacro place-block-on [current-block-world a b]
+  `(let [stack-a# (find-stack ~a ~current-block-world)
+         stack-b# (find-stack ~b ~current-block-world)]
+     (remove-block ~current-block-world ~a stack-a#)
+     (add-block-to-stack ~current-block-world ~a stack-b#)))
 
-(defmacro move-block [a b]
+(defmacro move-block [current-block-world a b]
   `(do
-     (let [stack-a# (find-stack ~a)
-           stack-b# (find-stack ~b)]
-       (remove-block ~a stack-a#)
-       (add-block-to-stack ~a stack-b#))))
+     (let [stack-a# (find-stack ~a ~current-block-world)
+           stack-b# (find-stack ~b ~current-block-world)]
+       (remove-block ~current-block-world ~a stack-a#)
+       (add-block-to-stack ~current-block-world ~a stack-b#))))
 
-(defmacro place-pile-on [pile b]
-  `(let [stack-b# (find-stack ~b)]
+(defmacro place-pile-on [current-block-world pile b]
+  `(let [stack-b# (find-stack ~b ~current-block-world)]
      (concat stack-b# ~pile)))
 
-(defmacro remove-pile [a]
-  `(let [stack-a# (find-stack ~a)
+(defmacro remove-pile [current-block-world a]
+  `(let [stack-a# (find-stack ~a ~current-block-world)
          idx-a# (index-of ~a stack-a#)]
      (subvec stack-a# idx-a#)))
 
-(defmacro sub-stack-from [block stack]
+(defmacro sub-stack-from [current-block-world block stack]
   `(let [block-index# (index-of ~block ~stack)]
      (subvec ~stack block-index#)))
 
-(defmacro get-pile [block]
-  `(let [current-state# (nth @block-world-history @current-state-index)
-         stack-index# (find-stack ~block current-state#)]
+(defmacro get-pile [current-block-world block]
+  `(let [stack-index# (find-stack ~block ~current-block-world)]
      (when (not= stack-index# -1)
-       (sub-stack-from ~block (nth current-state# stack-index#)))))
+       (sub-stack-from ~current-block-world ~block (nth ~current-block-world stack-index#)))))
 
-(defmacro move-block-to-new-stack [block]
+(defmacro move-block-to-new-stack [current-block-world block]
   `(do
-     (let [stack# (find-stack ~block)
+     (let [stack# (find-stack ~block ~current-block-world)
            idx# (index-of ~block stack#)]
        (swap! block-world-history update-in [stack#] #(subvec % 0 idx#)))
      (swap! block-world-history conj [(list ~block)])))
@@ -116,6 +136,36 @@
   `(when (< @current-state-index (dec (count @block-world-history)))
      (swap! current-state-index inc)
      (nth @block-world-history @current-state-index)))
+
+;; ... [Update other macros similarly] ...
+
+;; Command Definitions
+(defcommand initialize-world [n]
+  (mapv vector (range 1 (inc n))))
+
+(defcommand move-onto [current-block-world a b]
+  (println "block-world before move-onto:" current-block-world)
+  (with-blocks-on-top current-block-world a
+    (with-blocks-on-top current-block-world b
+      (move-block current-block-world a b))))
+
+(defcommand move-over [current-block-world a b]
+  (return-blocks-on-top current-block-world a)
+  (place-block-on current-block-world a b))
+
+(defcommand pile-onto [current-block-world a b]
+  (return-blocks-on-top current-block-world b)
+  (let [pile (get-pile current-block-world a)]
+    (remove-pile current-block-world a)
+    (place-pile-on current-block-world pile b)))
+
+(defcommand pile-over [current-block-world a b]
+  (let [pile (get-pile current-block-world a)]
+    (remove-pile current-block-world a)
+    (place-pile-on current-block-world pile b)))
+;; ... [Update other command definitions similarly] ...
+
+;; Parse Commands
 
 (defn parse-command [input]
   (case (first input)
@@ -136,52 +186,20 @@
   (map (fn [line]
          (parse-command (clojure.string/split line #" ")))
        input-program))
-  
-;; Command Definitions
-(defcommand initialize-world [[] n]
-  (map list (range 1 (inc n))))
 
-(defcommand move-onto [a b]
-  (return-blocks-on-top a)
-  (return-blocks-on-top b)
-  (move-block a b))
-
-(defcommand move-over [a b]
-  (return-blocks-on-top a)
-  (place-block-on a b))
-
-(defcommand pile-onto [a b]
-  (return-blocks-on-top b)
-  (let [pile (get-pile a)]
-    (remove-pile a)
-    (place-pile-on pile b)))
-
-(defcommand pile-over [a b]
-  (let [pile (get-pile a)]
-    (remove-pile a)
-    (place-pile-on pile b)))
 
 ;; Execution Function
-;; (defn execute-command [command & args]
-;;   (let [current-block-world (nth @block-world-history @current-state-index)]
-;;     (cond (or (= command 'undo) (= command 'redo)) (apply command args)
-;;           (= command initialize-world)
-;;           (do
-;;             (reset! block-world-history [(apply command args)])
-;;             (reset! current-state-index 0))
-;;           :else
-;;           (apply command (cons current-block-world args)))))
-
 (defn execute-command [command & args]
   (let [current-block-world (nth @block-world-history @current-state-index)]
     (cond
       (= command initialize-world)
       (do
-        (reset! block-world-history (apply command args))
+        (println "Initializing world." command args)
+        (reset! block-world-history [(apply command args)])
         (reset! current-state-index 0))
 
-      (= command 'undo) (apply command args)
-      (= command 'redo) (apply command args)
+      (= command 'undo) (undo)
+      (= command 'redo) (redo)
 
       :else
       (let [new-block-world (apply command current-block-world args)]
