@@ -42,12 +42,12 @@
    "in world" ex-meta)
   block-world)
 
-(defn log-legal-move-and-return [command-type src-block dest-block modifier-type block-world]
+(defn log-legal-command-and-return [command-type src-block dest-block modifier-type block-world new-world]
   (println
    "Performing" command-type
    src-block modifier-type dest-block
-   " in " block-world " to get " block-world)
-  block-world)
+   " in " block-world " to get " new-world)
+  new-world)
 
 (defn move-block [[src-block src-stack-index] dest-stack-index block-world]
   (let [updated-world (update block-world src-stack-index (partial filterv (complement #{src-block})))
@@ -82,7 +82,7 @@
                       (= command-type "move") (clear-block src-block)
                       (= modifier-type :onto) (clear-block dest-block)
                       true (command-fn [src-block src-stack-index] dest-stack-index))]
-      (log-legal-move-and-return command-type src-block dest-block modifier-type new-world))
+      (log-legal-command-and-return command-type src-block dest-block modifier-type block-world new-world))
     (catch Exception e
       (log-illegal-move-and-return
        command-type src-block dest-block modifier-type (ex-data e) block-world))))
@@ -97,25 +97,24 @@
   (mapv vector (range 1 (inc n))))
 
 (defn parse-command [command]
-  (let [[_ command-type src-block modifier-type dest-block] (re-find #"(move|pile) (\d+) (onto|over) (\d+)" command)
-        src-block (Integer/parseInt src-block)
-        dest-block (Integer/parseInt dest-block)
-        modifier-type (keyword modifier-type)]
-    [command-type src-block dest-block modifier-type]))
+  (let [[_ command-type src-block modifier-type dest-block]
+        (re-find #"(move|pile) (\d+) (onto|over) (\d+)" command)]
+    [(keyword command-type)
+     (Integer. src-block)
+     (Integer. dest-block)
+     (keyword modifier-type)]))
 
-(defn parse-commands [commands]
-  (let [n (Integer/parseInt (first commands))
-        commands (rest commands)]
-    (concat [n]
-  (map parse-command commands))))
+(defn parse-commands [[n & commands]]
+  (concat [(Integer. n)] (mapv parse-command commands)))
 
-(defn run-commands [commands]
-  (let [n (first commands)
-        commands (rest commands)
-        world (initialize-world n)]
-    (reduce (fn [world [command-type src-block dest-block modifier-type]]
-              (if (= command-type "move")
-                (move src-block dest-block modifier-type world)
-                (pile src-block dest-block modifier-type world)))
-            world
-            commands)))
+(defmacro apply-command [command# args# world#]
+  `(#(apply ~command# (conj (vec ~args#) %)) ~world#))
+
+(defn run-commands [[n & commands]]
+  (println "Running commands w/ macro" n commands)
+  (let [world (initialize-world n)
+        execute-command (fn [world [command-type & args]]
+                          (condp = command-type
+                            :move (apply-command move args world)
+                            :pile (apply-command pile args world)))]
+    (reduce execute-command world commands)))
