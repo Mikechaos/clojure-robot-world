@@ -99,22 +99,19 @@
 (defn parse-command [command]
   (let [[_ command-type src-block modifier-type dest-block]
         (re-find #"(move|pile) (\d+) (onto|over) (\d+)" command)]
-    [(keyword command-type)
-     (Integer. src-block)
-     (Integer. dest-block)
-     (keyword modifier-type)]))
+    [(keyword command-type) (Integer. src-block)
+     (Integer. dest-block) (keyword modifier-type)]))
 
 (defn parse-commands [[n & commands]]
   (concat [(Integer. n)] (mapv parse-command commands)))
 
-(defmacro apply-command [command# args# world#]
-  `(#(apply ~command# (conj (vec ~args#) %)) ~world#))
+(defmacro apply-command [command-type# args# world#]
+  `(let [command# (~command-type# {:move move :pile pile})]
+     (#(apply command# (conj (vec ~args#) %)) ~world#)))
+
+(defn fn-apply-command [world [command-type & args]]
+  (apply-command command-type args world))
 
 (defn run-commands [[n & commands]]
-  (println "Running commands w/ macro" n commands)
-  (let [world (initialize-world n)
-        execute-command (fn [world [command-type & args]]
-                          (condp = command-type
-                            :move (apply-command move args world)
-                            :pile (apply-command pile args world)))]
-    (reduce execute-command world commands)))
+  (let [world (initialize-world n)]
+    (reduce fn-apply-command world commands)))
