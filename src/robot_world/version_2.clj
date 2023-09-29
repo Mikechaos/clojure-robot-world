@@ -34,6 +34,14 @@
       (return-blocks blocks-to-return updated-world))
     block-world))
 
+(comment
+  (def world-now [[1 2 3 4] [] [] []])
+  (def world-after (clear-block 2 world-now))
+  world-after
+  (println "world-after" world-after)
+  ,)
+
+
 (defn log-illegal-move-and-return [command-type src-block dest-block modifier-type ex-meta block-world]
   (println
    "Performing" command-type
@@ -115,3 +123,68 @@
 (defn run-commands [[n & commands]]
   (let [world (initialize-world n)]
     (reduce fn-apply-command world commands)))
+
+(defn clear-src-block [world src-block & _]
+  (clear-block src-block world))
+
+(defn clear-dest-block [world _ dest-block]
+   (clear-block dest-block world))
+
+(defmacro command [name & steps]
+  `(def ~name
+     (fn [world# & args#]
+       (let [steps# (list ~@steps)]
+         (reduce (fn [world# step#]
+                   (apply step# world# args#))
+                 world#
+                 steps#)))))
+
+(defn place-block [world src-block dest-block]
+  (let [src-stack-index (find-stack src-block world)
+        dest-stack-index (find-stack dest-block world)]
+    (move-block [src-block src-stack-index] dest-stack-index world)))
+
+(defn place-pile [world src-block dest-block]
+  (let [src-stack-index (find-stack src-block world)
+        dest-stack-index (find-stack dest-block world)]
+    (move-pile [src-block src-stack-index] dest-stack-index world)))
+
+(defn reset-world [world & args]
+  (mapv vector (range 1 (inc (count world)))))
+
+(command move-onto
+  clear-src-block
+  clear-dest-block
+  place-block)
+
+(command move-over
+  clear-src-block
+  place-block)
+
+(command pile-onto
+  clear-dest-block
+  place-pile)
+
+(command pile-over
+  place-pile)
+
+(command clear
+  clear-src-block)
+
+(command reset
+  reset-world)
+
+(comment
+  (-> [[1 2] [] [3 4] []]
+      (move-onto 2 3)
+      (move-onto 4 2)
+      (move-over 2 4)
+      (move-over 1 4)
+      (move-onto 3 4)
+      (pile-onto 4 2)
+      (move-onto 3 1)
+      (pile-over 2 1)
+      (clear 3))
+
+  ;; [[1 3] [2] [] [4]]
+  ,)
