@@ -71,7 +71,6 @@
                              dest-stack-index (into (nth block-world dest-stack-index) blocks-pile))]
     updated-world))
 
-
 (defn validate-world-before-command [src-block dest-block block-world]
   (let [src-stack-index (find-stack src-block block-world)
         dest-stack-index (find-stack dest-block block-world)]
@@ -103,26 +102,6 @@
 
 (defn initialize-world [n]
   (mapv vector (range 1 (inc n))))
-
-(defn parse-command [command]
-  (let [[_ command-type src-block modifier-type dest-block]
-        (re-find #"(move|pile) (\d+) (onto|over) (\d+)" command)]
-    [(keyword command-type) (Integer. src-block)
-     (Integer. dest-block) (keyword modifier-type)]))
-
-(defn parse-commands [[n & commands]]
-  (concat [(Integer. n)] (mapv parse-command commands)))
-
-(defmacro apply-command [command-type# args# world#]
-  `(let [command# (~command-type# {:move move :pile pile})]
-     (#(apply command# (conj (vec ~args#) %)) ~world#)))
-
-(defn fn-apply-command [world [command-type & args]]
-  (apply-command command-type args world))
-
-(defn run-commands [[n & commands]]
-  (let [world (initialize-world n)]
-    (reduce fn-apply-command world commands)))
 
 (defn clear-src-block [world src-block & _]
   (clear-block src-block world))

@@ -1,6 +1,8 @@
 (ns robot-world.core-test
   (:require [clojure.test :refer :all]
-            [robot-world.version-2 :as v2]))
+            [robot-world.core :refer :all]
+            [robot-world.version-2 :as v2]
+            [robot-world.parser :refer [run-program]]))
 
 (deftest test-find-stack
   (testing "find-stack should return the correct stack index"
@@ -76,20 +78,18 @@
 
 (deftest test-input-program
   (testing "Test parsing and executing the input program"
-    (let [input-program ["10"
-                         "move 3 over 2"
-                         "move 8 onto 7"
-                         "move 9 onto 7"
-                         "move 6 over 8"
-                         "pile 7 onto 8"
-                         "pile 3 onto 1"
-                         "pile 4 onto 1"
-                         "move 3 over 2"
-                         "pile 2 onto 4"
-                         "pile 6 onto 5"
-                         "pile 8 over 10"]
-          world (-> input-program
-                    (v2/parse-commands)
-                    (v2/run-commands))
+    (let [program ["10"
+                   "move 3 over 2"
+                   "move 8 onto 7"
+                   "move 9 onto 7"
+                   "move 6 over 8"
+                   "pile 7 onto 8"
+                   "pile 3 onto 1"
+                   "pile 4 onto 1"
+                   "move 3 over 2"
+                   "pile 2 onto 4"
+                   "pile 6 onto 5"
+                   "pile 8 over 10"]
+          world (run-program program)
           expected-output [[1 4 2 3] [] [] [] [5 6] [] [] [] [] [10 8 7 9]]]
-         (is (= world expected-output)))))
+      (is (= world expected-output)))))
