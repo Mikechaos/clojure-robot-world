@@ -101,6 +101,7 @@
   (perform-command "pile" src-block dest-block pile-type block-world move-pile))
 
 (defn initialize-world [n]
+  (println "Initializing world" n (mapv vector (range 1 (inc n))))
   (mapv vector (range 1 (inc n))))
 
 (defn clear-src-block [world src-block & _]
@@ -108,6 +109,40 @@
 
 (defn clear-dest-block [world _ dest-block]
    (clear-block dest-block world))
+
+
+(defn place-block-onto [world src-block dest-block]
+  (let [src-stack-index (find-stack src-block world)
+        dest-stack-index (find-stack dest-block world)]
+    (move-block [src-block src-stack-index] dest-stack-index world)))
+
+
+(defmacro command [name & body]
+  `(def ~name (fn [world# & [~@body]]
+                ~@(map (fn [step]
+                         (if (list? step)
+                           `(~(first step) world# ~@(rest step))
+                           step)) body))))
+
+(defmacro command [name & body]
+  `(def ~name (fn [world# ~@(if (vector? (first body)) (first body) [])]
+                (let [steps# (if (vector? (first ~body)) (rest ~body) ~body)]
+                  (reduce (fn [world# step#]
+                            (if (list? step#)
+                              (apply (first step#) world# (rest step#))
+                              step#))
+                          world#
+                          steps#)))))
+
+(defmacro command [name & body]
+  `(def ~name (fn [world# ~@(if (vector? (first body)) (first body) [])]
+                (let [steps# (if (vector? (first ~body)) (rest ~body) ~body)]
+                  (reduce (fn [world# step#]
+                            (if (list? step#)
+                              (apply (first step#) world# (rest step#))
+                              step#))
+                          world#
+                          steps#)))))
 
 (defmacro command [name & steps]
   `(def ~name
@@ -117,6 +152,48 @@
                    (apply step# world# args#))
                  world#
                  steps#)))))
+
+(defn find-stack [block block-world]
+  (first
+   (keep-indexed (fn [idx stack]
+                   (when (some #{block} stack) idx))
+                 block-world)))
+
+(defn replace-stack [idx new-stack block-world]
+  (assoc block-world idx new-stack))
+
+(defn return-blocks [blocks block-world]
+  (reduce (fn [world block]
+            (let [original-position (- block 1)] ; calculate the original stack of the block
+              (update world original-position conj block))) ; return block to its original stack
+          block-world
+          blocks))
+
+(defn index-of [item coll]
+   (some (fn [[idx elem]] (when (= item elem) idx))
+        (map-indexed vector coll)))
+
+
+(defn validate-clear-block [block block-world]
+  (when-let [stack-index (find-stack block block-world)]
+    (when-let [idx (index-of block (nth block-world stack-index))]
+      (if (> idx -1)
+        [stack-index (inc idx) (nth block-world stack-index)]
+        nil))))
+
+(defn clear-block [block block-world]
+  (if-let [[stack-index index-of-block-above stack] (validate-clear-block block block-world)]
+    (let [blocks-to-return (subvec stack index-of-block-above)
+          updated-world (assoc block-world stack-index (subvec stack 0 index-of-block-above))]
+      (return-blocks blocks-to-return updated-world))
+    block-world))
+
+(defn clear-src-block [world src-block & r]
+  (clear-block src-block world))
+
+(defn clear-dest-block [world _ dest-block]
+  (clear-block dest-block world))
+
 
 (defn place-block [world src-block dest-block]
   (let [src-stack-index (find-stack src-block world)

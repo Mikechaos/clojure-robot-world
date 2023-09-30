@@ -1,18 +1,19 @@
 (ns robot-world.core-test
-  (:require [clojure.test :refer :all]
-            [robot-world.core :refer :all]
+  (:require [clojure.test :refer [deftest is testing]]
+            [robot-world.core :as core]
             [robot-world.version-2 :as v2]
-            [robot-world.parser :refer [run-program]]))
+            [robot-world.parser :refer [run-program]]
+            [robot-world.dsl :as dsl]))
 
 (deftest test-find-stack
   (testing "find-stack should return the correct stack index"
-    (is (= (find-stack 3 (initialize-world 5)) 2)))
+    (is (= (core/find-stack 3 (core/initialize-world 5)) 2)))
 
   (testing "find-stack should return the correct stack index when blocks are moved"
-    (is (= (find-stack 3 [[1] [2 3] [] [4] [5]]) 1)))
+    (is (= (core/find-stack 3 [[1] [2 3] [] [4] [5]]) 1)))
 
   (testing "find-stack should return nil if the block is not present in any stack"
-    (is (nil? (find-stack 6 (initialize-world 5))))))
+    (is (nil? (core/find-stack 6 (core/initialize-world 5))))))
 
 (deftest test-move-v2
   (let [initial-world [[] [2] [3 1] [4]]]
@@ -93,3 +94,18 @@
           world (run-program program)
           expected-output [[1 4 2 3] [] [] [] [5 6] [] [] [] [] [10 8 7 9]]]
       (is (= world expected-output)))))
+
+(deftest test-dsl
+  (testing "Test the DSL"
+    (let [initial-world (v2/initialize-world 4)
+          updated-world (-> initial-world
+                            (dsl/move-onto 2 3)
+                            (dsl/move-onto 4 2)
+                            (dsl/move-over 2 4)
+                            (dsl/move-over 1 4)
+                            (dsl/move-onto 3 4)
+                            (dsl/pile-onto 4 2)
+                            (dsl/move-onto 3 1)
+                            (dsl/pile-over 2 1)
+                            (dsl/clear 3))]
+      (is (= updated-world [[1 3] [2] [] [4]])))))
