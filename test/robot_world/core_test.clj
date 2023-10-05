@@ -3,7 +3,7 @@
             [robot-world.core :as core]
             [robot-world.version-2 :as v2]
             [robot-world.parser :refer [run-program]]
-            [robot-world.dsl :as dsl]))
+            [robot-world.dsl2 :as dsl2]))
 
 (deftest test-find-stack
   (testing "find-stack should return the correct stack index"
@@ -96,16 +96,15 @@
       (is (= world expected-output)))))
 
 (deftest test-dsl
-  (testing "Test the DSL"
+  (testing "Test the DSL v2"
     (let [initial-world (v2/initialize-world 4)
           updated-world (-> initial-world
-                            (dsl/move-onto 2 3)
-                            (dsl/move-onto 4 2)
-                            (dsl/move-over 2 4)
-                            (dsl/move-over 1 4)
-                            (dsl/move-onto 3 4)
-                            (dsl/pile-onto 4 2)
-                            (dsl/move-onto 3 1)
-                            (dsl/pile-over 2 1)
-                            (dsl/clear 3))]
-      (is (= updated-world [[1 3] [2] [] [4]])))))
+                            (dsl2/move-onto 2 3)
+                            (dsl2/move-onto 4 2)
+                            (dsl2/move-over 2 4)
+                            (dsl2/move-over 1 4)
+                            (dsl2/move-onto 3 4)
+                            (dsl2/pile-onto 4 2)
+                            (dsl2/move-onto 3 1)
+                            (dsl2/pile-over 2 1))]
+      (is (= updated-world [[] [] [3 2 4 1] []])))))
