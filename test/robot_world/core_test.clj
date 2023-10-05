@@ -3,7 +3,8 @@
             [robot-world.core :as core]
             [robot-world.version-2 :as v2]
             [robot-world.parser :refer [run-program]]
-            [robot-world.dsl2 :as dsl2]))
+            [robot-world.dsl2 :as dsl2]
+            [robot-world.dsl-v1 :as dsl1]))
 
 (deftest test-find-stack
   (testing "find-stack should return the correct stack index"
@@ -95,7 +96,24 @@
           expected-output [[1 4 2 3] [] [] [] [5 6] [] [] [] [] [10 8 7 9]]]
       (is (= world expected-output)))))
 
-(deftest test-dsl
+
+;; Failing test case as the dsl-v1 didn't support no-op for invalid commands
+(deftest test-dsl-v1
+  (testing "Test the DSL v1"
+    (let [initial-world (v2/initialize-world 4)
+          updated-world (-> initial-world
+                            (dsl1/move-onto 2 3)
+                            (dsl1/move-onto 4 2)
+                            (dsl1/move-over 2 4)
+                            (dsl1/move-over 1 4)
+                            (dsl1/move-onto 3 4)
+                            (dsl1/pile-onto 4 2)
+                            (dsl1/move-onto 3 1)
+                            (dsl1/pile-over 2 1)
+                            (dsl1/clear 3))]
+      (is (= updated-world [[1] [2] [3] [4]])))))
+
+(deftest test-dsl-v2
   (testing "Test the DSL v2"
     (let [initial-world (v2/initialize-world 4)
           updated-world (-> initial-world
